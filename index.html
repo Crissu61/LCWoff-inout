@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LC Waikiki Offline – IN / OUT</title>
+<meta name="theme-color" content="#0b2a4a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<style>
+  :root{
+    --navy:#0b2a4a; --navy2:#123d6b; --in:#1b7f4c; --in-bg:#e6f4ec; --out:#1d5fb3; --out-bg:#e7eefb;
+    --bg:#f3f5f8; --card:#ffffff; --text:#1c2430; --muted:#6b7480; --line:#e1e5eb;
+    --danger:#c0392b; --warn:#b26a00; --warn-bg:#fff4e0; --radius:12px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:15px;-webkit-text-size-adjust:100%}
+  button,input,select,textarea{font:inherit;color:inherit}
+  button{cursor:pointer;border:none;background:none}
+  .hidden{display:none !important}
+
+  /* ---------- Login ---------- */
+  #login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,var(--navy),var(--navy2))}
+  .login-card{background:var(--card);border-radius:16px;padding:28px 24px;width:100%;max-width:380px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+  .login-card h1{margin:0 0 4px;font-size:20px;color:var(--navy)}
+  .login-card p{margin:0 0 20px;color:var(--muted);font-size:13px}
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+  .field label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .field input,.field select,.field textarea{border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:#fff;width:100%}
+  .field input:focus,.field textarea:focus{outline:2px solid var(--out);border-color:transparent}
+  .field textarea{min-height:70px;resize:vertical}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;padding:11px 16px;font-weight:600;transition:filter .15s}
+  .btn:active{filter:brightness(.9)}
+  .btn-primary{background:var(--navy);color:#fff;width:100%}
+  .btn-in{background:var(--in);color:#fff}
+  .btn-out{background:var(--out);color:#fff}
+  .btn-ghost{background:#eef1f5;color:var(--text)}
+  .btn-danger{background:#fdecea;color:var(--danger)}
+  .btn-sm{padding:8px 12px;font-size:13px;border-radius:9px}
+  .error{color:var(--danger);font-size:13px;min-height:18px;margin-top:6px}
+
+  /* ---------- App shell ---------- */
+  header{background:var(--navy);color:#fff;padding:14px 16px 10px;position:sticky;top:0;z-index:20}
+  .hdr-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .hdr-top h1{margin:0;font-size:17px;font-weight:700;letter-spacing:.01em}
+  .hdr-top h1 small{display:block;font-size:11px;font-weight:400;opacity:.75;margin-top:2px}
+  .hdr-top button{color:#fff;opacity:.85;font-size:13px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.12)}
+  .stock{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .stock .box{background:rgba(255,255,255,.1);border-radius:10px;padding:8px 12px}
+  .stock .box .v{font-size:24px;font-weight:700;line-height:1.1}
+  .stock .box .l{font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.04em}
+  .stock .box.warn .v{color:#ffd27d}
+
+  nav.tabs{display:flex;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:19}
+  nav.tabs button{flex:1;padding:13px 0;font-weight:700;font-size:15px;color:var(--muted);border-bottom:3px solid transparent}
+  nav.tabs button.active-in{color:var(--in);border-bottom-color:var(--in)}
+  nav.tabs button.active-out{color:var(--out);border-bottom-color:var(--out)}
+
+  main{padding:14px 14px 90px;max-width:760px;margin:0 auto}
+
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+  .toolbar .period{display:flex;align-items:center;gap:6px;flex:1;min-width:230px}
+  .toolbar .period input{border:1px solid var(--line);border-radius:9px;padding:8px;background:#fff;flex:1;min-width:0;font-size:13px}
+  .toolbar .period span{color:var(--muted);font-size:13px}
+
+  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+  @media (max-width:420px){.summary{grid-template-columns:repeat(2,1fr)}}
+  .sum{background:var(--card);border-radius:var(--radius);padding:10px 12px;border:1px solid var(--line)}
+  .sum .v{font-size:20px;font-weight:700;line-height:1.1}
+  .sum .l{font-size:11px;color:var(--muted);margin-top:3px}
+  .sum .s{font-size:11px;color:var(--muted)}
+  .sum.in .v{color:var(--in)} .sum.out .v{color:var(--out)}
+
+  .section-title{display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px}
+  .section-title h2{margin:0;font-size:14px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+
+  /* ---------- Inbound cards ---------- */
+  .card{background:var(--card);border-radius:var(--radius);border:1px solid var(--line);padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .card-head .truck{font-size:18px;font-weight:700;letter-spacing:.02em}
+  .card-head .meta{font-size:13px;color:var(--muted);margin-top:2px}
+  .card-head .boxes{font-size:22px;font-weight:700;color:var(--in);text-align:right;line-height:1}
+  .card-head .boxes small{display:block;font-size:11px;color:var(--muted);font-weight:500;margin-top:3px}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;margin-top:6px}
+  .badge.wait{background:#eef1f5;color:var(--muted)}
+  .badge.run{background:var(--warn-bg);color:var(--warn)}
+  .badge.done{background:var(--in-bg);color:var(--in)}
+  .badge.mid{background:var(--out-bg);color:var(--out)}
+  .stages{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px;display:grid;gap:6px}
+  .stage{display:grid;grid-template-columns:86px 1fr auto;align-items:center;gap:8px;font-size:13px}
+  .stage .n{font-weight:600;color:var(--muted)}
+  .stage .t{color:var(--text)}
+  .stage .t .d{font-weight:700;margin-left:4px}
+  .stage .t .live{font-weight:700;color:var(--warn);font-variant-numeric:tabular-nums}
+  .card-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+  .card-actions .spacer{flex:1}
+  .note{font-size:13px;color:var(--muted);margin-top:8px;white-space:pre-wrap}
+
+  /* ---------- Outbound ---------- */
+  .day{margin-bottom:12px}
+  .day-head{display:flex;align-items:baseline;justify-content:space-between;padding:6px 4px;font-size:13px;color:var(--muted);font-weight:600}
+  .day-head b{color:var(--out);font-size:14px}
+  .row{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;margin-bottom:6px;display:grid;grid-template-columns:52px 1fr auto;gap:10px;align-items:center}
+  .row .time{font-weight:700;font-variant-numeric:tabular-nums}
+  .row .info{font-size:13px;min-width:0}
+  .row .info .truck{font-weight:600;font-size:14px}
+  .row .info .sub{color:var(--muted);white-space:pre-wrap}
+  .row .nums{text-align:right;line-height:1.15}
+  .row .nums .b{font-size:18px;font-weight:700;color:var(--out)}
+  .row .nums .p{font-size:12px;color:var(--muted)}
+  .row .act{grid-column:1/-1;display:flex;gap:6px;justify-content:flex-end}
+
+  .empty{text-align:center;color:var(--muted);padding:30px 10px;font-size:14px}
+
+  /* ---------- FAB ---------- */
+  .fab{position:fixed;right:16px;bottom:20px;z-index:25;border-radius:999px;padding:14px 20px;font-size:15px;font-weight:700;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  .fab.in{background:var(--in)} .fab.out{background:var(--out)}
+
+  /* ---------- Modal ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(10,20,35,.55);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+  @media (min-width:600px){.overlay{align-items:center}}
+  .modal{background:var(--card);width:100%;max-width:520px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 18px 24px}
+  @media (min-width:600px){.modal{border-radius:18px}}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .modal-head h3{margin:0;font-size:17px}
+  .modal-head .x{font-size:22px;line-height:1;padding:4px 10px;border-radius:8px;background:#eef1f5}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .modal .actions{display:flex;gap:8px;margin-top:6px}
+  .modal .actions .btn{flex:1}
+  fieldset{border:1px dashed var(--line);border-radius:10px;padding:10px 12px;margin:0 0 14px}
+  legend{font-size:12px;color:var(--muted);font-weight:600;padding:0 6px}
+
+  #toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#1c2430;color:#fff;padding:10px 16px;border-radius:999px;font-size:13px;z-index:99;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
+  #toast.show{opacity:1}
+  .offline-bar{background:var(--warn-bg);color:var(--warn);font-size:12px;text-align:center;padding:5px;font-weight:600}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="login" class="screen">
+  <div class="login-card">
+    <h1>LC Waikiki Offline</h1>
+    <p>Evidență intrări / ieșiri cutii</p>
+    <form id="loginForm">
+      <div class="field"><label>Email</label><input id="email" type="email" autocomplete="username" required></div>
+      <div class="field"><label>Parolă</label><input id="password" type="password" autocomplete="current-password" required></div>
+      <button class="btn btn-primary" type="submit" id="loginBtn">Intră</button>
+      <div class="error" id="loginError"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="screen hidden">
+  <header>
+    <div class="hdr-top">
+      <h1>LC Waikiki Offline <small id="userLabel"></small></h1>
+      <button id="logoutBtn">Ieșire</button>
+    </div>
+    <div class="stock">
+      <div class="box"><div class="v" id="stockTotal">–</div><div class="l">Cutii în depozit</div></div>
+      <div class="box warn"><div class="v" id="stockUnsorted">–</div><div class="l">din care nesortate (bulk)</div></div>
+    </div>
+  </header>
+  <div class="offline-bar hidden" id="offlineBar">Fără conexiune – modificările se salvează local și se sincronizează când revine internetul</div>
+  <nav class="tabs">
+    <button id="tabInBtn" class="active-in">⬇ INTRĂRI</button>
+    <button id="tabOutBtn">⬆ LIVRĂRI</button>
+  </nav>
+
+  <main>
+    <div class="toolbar">
+      <div class="period">
+        <input type="date" id="fromDate"><span>→</span><input type="date" id="toDate">
+      </div>
+      <button class="btn btn-ghost btn-sm" id="periodMonth">Luna</button>
+      <button class="btn btn-ghost btn-sm" id="periodAll">Tot</button>
+      <button class="btn btn-ghost btn-sm" id="exportBtn">⬇ CSV</button>
+    </div>
+
+    <!-- ---------- TAB IN ---------- -->
+    <section id="tabIn">
+      <div class="summary" id="sumIn"></div>
+      <div class="section-title"><h2>Camioane în perioadă</h2><span id="countIn" class="s"></span></div>
+      <div id="listIn"></div>
+    </section>
+
+    <!-- ---------- TAB OUT ---------- -->
+    <section id="tabOut" class="hidden">
+      <div class="summary" id="sumOut"></div>
+      <div class="section-title"><h2>Livrări pe zile</h2><span id="countOut" class="s"></span></div>
+      <div id="listOut"></div>
+    </section>
+  </main>
+
+  <button class="fab in" id="fabIn">+ Camion nou</button>
+  <button class="fab out hidden" id="fabOut">+ Livrare</button>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toast"></div>
+
+<script src="config.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+/* ================= Firebase ================= */
+if (!window.FIREBASE_CONFIG || !window.FIREBASE_CONFIG.apiKey || window.FIREBASE_CONFIG.apiKey.startsWith("PUNE")) {
+  document.getElementById("loginError").textContent = "config.js nu este completat cu datele proiectului Firebase (vezi README).";
+}
+const app = initializeApp(window.FIREBASE_CONFIG || {});
+const auth = getAuth(app);
+const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+const colIn = collection(db, "inbound");
+const colOut = collection(db, "outbound");
+
+/* ================= State ================= */
+const S = { inbound: [], outbound: [], tab: "in", from: null, to: null, unsubs: [] };
+const $ = (id) => document.getElementById(id);
+
+/* ================= Helpers ================= */
+const pad = (n) => String(n).padStart(2, "0");
+function todayStr(d = new Date()) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function nowLocalInput(d = new Date()) { return `${todayStr(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function isoToLocalInput(iso) { if (!iso) return ""; const d = new Date(iso); return isNaN(d) ? "" : nowLocalInput(d); }
+function localInputToIso(v) { if (!v) return null; const d = new Date(v); return isNaN(d) ? null : d.toISOString(); }
+function fmtDate(s) { if (!s) return ""; const [y, m, d] = s.split("-"); return `${d}.${m}.${y}`; }
+function fmtDateIso(iso) { if (!iso) return ""; const d = new Date(iso); return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`; }
+function fmtTime(iso) { if (!iso) return "–"; const d = new Date(iso); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function fmtDur(ms) {
+  if (ms == null || isNaN(ms) || ms < 0) return "–";
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  if (h > 0) return `${h}h ${pad(m)}m`;
+  if (m > 0) return `${m}m ${pad(sec)}s`;
+  return `${sec}s`;
+}
+function dur(a, b) { if (!a || !b) return null; return new Date(b) - new Date(a); }
+function durMin(a, b) { const d = dur(a, b); return d == null ? "" : (d / 60000).toFixed(1).replace(".", ","); }
+function num(v) { const n = Number(v); return isNaN(n) ? 0 : n; }
+function fmtN(n) { return (n ?? 0).toLocaleString("ro-RO"); }
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function dayOfIso(iso) { return iso ? todayStr(new Date(iso)) : ""; }
+function inPeriod(dayStr) { if (!dayStr) return false; return (!S.from || dayStr >= S.from) && (!S.to || dayStr <= S.to); }
+let toastT;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2200); }
+
+function statusOf(r) {
+  if (r.sortEnd) return { k: "done", t: "Sortat ✓" };
+  if (r.sortStart) return { k: "run", t: "În sortare" };
+  if (r.unloadEnd) return { k: "mid", t: "Descărcat, nesortat" };
+  if (r.unloadStart) return { k: "run", t: "În descărcare" };
+  return { k: "wait", t: "Așteaptă descărcarea" };
+}
+
+/* ================= Auth ================= */
+$("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("loginError").textContent = "";
+  $("loginBtn").disabled = true;
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+    await signInWithEmailAndPassword(auth, $("email").value.trim(), $("password").value);
+  } catch (err) {
+    const map = { "auth/invalid-credential": "Email sau parolă greșite.", "auth/user-not-found": "Utilizator inexistent.", "auth/wrong-password": "Parolă greșită.", "auth/network-request-failed": "Fără conexiune la internet.", "auth/too-many-requests": "Prea multe încercări, așteaptă puțin." };
+    $("loginError").textContent = map[err.code] || ("Eroare: " + err.code);
+  } finally { $("loginBtn").disabled = false; }
+});
+$("logoutBtn").addEventListener("click", () => signOut(auth));
+
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+    $("userLabel").textContent = user.email;
+    subscribe();
+  } else {
+    $("app").classList.add("hidden"); $("login").classList.remove("hidden");
+    S.unsubs.forEach((u) => u()); S.unsubs = []; S.inbound = []; S.outbound = [];
+  }
+});
+
+function subscribe() {
+  S.unsubs.forEach((u) => u()); S.unsubs = [];
+  S.unsubs.push(onSnapshot(query(colIn, orderBy("createdAt", "desc")), (snap) => {
+    S.inbound = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    render();
+  }, (err) => toast("Eroare citire intrări: " + err.code)));
+  S.unsubs.push(onSnapshot(query(colOut, orderBy("at", "desc")), (snap) => {
+    S.outbound = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    render();
+  }, (err) => toast("Eroare citire livrări: " + err.code)));
+}
+
+/* ================= Period ================= */
+function setMonth() {
+  const d = new Date();
+  S.from = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`; S.to = todayStr(d);
+  $("fromDate").value = S.from; $("toDate").value = S.to; render();
+}
+$("periodMonth").addEventListener("click", setMonth);
+$("periodAll").addEventListener("click", () => { S.from = null; S.to = null; $("fromDate").value = ""; $("toDate").value = ""; render(); });
+$("fromDate").addEventListener("change", (e) => { S.from = e.target.value || null; render(); });
+$("toDate").addEventListener("change", (e) => { S.to = e.target.value || null; render(); });
+setMonth();
+
+/* ================= Tabs ================= */
+function showTab(t) {
+  S.tab = t;
+  $("tabIn").classList.toggle("hidden", t !== "in"); $("tabOut").classList.toggle("hidden", t !== "out");
+  $("fabIn").classList.toggle("hidden", t !== "in"); $("fabOut").classList.toggle("hidden", t !== "out");
+  $("tabInBtn").className = t === "in" ? "active-in" : ""; $("tabOutBtn").className = t === "out" ? "active-out" : "";
+}
+$("tabInBtn").addEventListener("click", () => showTab("in"));
+$("tabOutBtn").addEventListener("click", () => showTab("out"));
+
+/* ================= Render ================= */
+function render() { renderStock(); renderIn(); renderOut(); }
+
+function renderStock() {
+  const sumIn = S.inbound.reduce((a, r) => a + num(r.boxes), 0);
+  const sumOut = S.outbound.reduce((a, r) => a + num(r.boxes), 0);
+  const unsorted = S.inbound.filter((r) => !r.sortEnd).reduce((a, r) => a + num(r.boxes), 0);
+  $("stockTotal").textContent = fmtN(sumIn - sumOut);
+  $("stockUnsorted").textContent = fmtN(unsorted);
+}
+
+function renderIn() {
+  const today = todayStr();
+  const rows = S.inbound.filter((r) => inPeriod(r.date));
+  const todayRows = S.inbound.filter((r) => r.date === today);
+  const boxes = rows.reduce((a, r) => a + num(r.boxes), 0);
+  const boxesToday = todayRows.reduce((a, r) => a + num(r.boxes), 0);
+  const unl = rows.filter((r) => r.unloadStart && r.unloadEnd);
+  const srt = rows.filter((r) => r.sortStart && r.sortEnd);
+  const unlMs = unl.reduce((a, r) => a + dur(r.unloadStart, r.unloadEnd), 0);
+  const srtMs = srt.reduce((a, r) => a + dur(r.sortStart, r.sortEnd), 0);
+  const unlBoxes = unl.reduce((a, r) => a + num(r.boxes), 0);
+  const srtBoxes = srt.reduce((a, r) => a + num(r.boxes), 0);
+  const perBox = (ms, b) => (b > 0 ? (ms / 1000 / b).toFixed(1).replace(".", ",") + " s/cutie" : "–");
+
+  $("sumIn").innerHTML = `
+    <div class="sum in"><div class="v">${fmtN(boxesToday)}</div><div class="l">Cutii intrate azi · ${todayRows.length} camioane</div></div>
+    <div class="sum in"><div class="v">${fmtN(boxes)}</div><div class="l">Cutii în perioadă · ${rows.length} camioane</div></div>
+    <div class="sum"><div class="v">${rows.filter((r) => !r.sortEnd).length}</div><div class="l">Camioane nefinalizate (în perioadă)</div></div>
+    <div class="sum"><div class="v">${unl.length ? fmtDur(unlMs / unl.length) : "–"}</div><div class="l">Medie descărcare / camion</div><div class="s">${perBox(unlMs, unlBoxes)}</div></div>
+    <div class="sum"><div class="v">${srt.length ? fmtDur(srtMs / srt.length) : "–"}</div><div class="l">Medie sortare / camion</div><div class="s">${perBox(srtMs, srtBoxes)}</div></div>
+    <div class="sum"><div class="v">${unl.length && srt.length ? fmtDur(unlMs / unl.length + srtMs / srt.length) : "–"}</div><div class="l">Medie total / camion</div></div>`;
+
+  $("countIn").textContent = rows.length ? `${rows.length} camioane` : "";
+  const sorted = [...rows].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (tsMs(b.createdAt) - tsMs(a.createdAt)));
+  $("listIn").innerHTML = sorted.length ? sorted.map(cardIn).join("") : `<div class="empty">Nicio intrare în perioada selectată.</div>`;
+}
+function tsMs(ts) { return ts && ts.toMillis ? ts.toMillis() : 0; }
+
+function stageRow(name, start, end, nowRunning) {
+  let t;
+  if (!start) t = `<span style="color:var(--muted)">–</span>`;
+  else if (!end) t = `${fmtTime(start)} → <span class="live" data-start="${esc(start)}">${fmtDur(Date.now() - new Date(start))}</span>`;
+  else t = `${fmtTime(start)} → ${fmtTime(end)}<span class="d">${fmtDur(dur(start, end))}</span>`;
+  return `<div class="stage"><span class="n">${name}</span><span class="t">${t}</span><span></span></div>`;
+}
+
+function cardIn(r) {
+  const st = statusOf(r);
+  let action = "";
+  if (!r.unloadStart) action = `<button class="btn btn-in btn-sm" data-act="unloadStart" data-id="${r.id}">▶ Start descărcare</button>`;
+  else if (!r.unloadEnd) action = `<button class="btn btn-danger btn-sm" data-act="unloadEnd" data-id="${r.id}">■ Stop descărcare</button>`;
+  else if (!r.sortStart) action = `<button class="btn btn-in btn-sm" data-act="sortStart" data-id="${r.id}">▶ Start sortare</button>`;
+  else if (!r.sortEnd) action = `<button class="btn btn-danger btn-sm" data-act="sortEnd" data-id="${r.id}">■ Stop sortare</button>`;
+  const total = r.unloadStart && r.sortEnd ? `<div class="stage"><span class="n">Total</span><span class="t"><span class="d" style="margin-left:0">${fmtDur(dur(r.unloadStart, r.sortEnd))}</span> <span style="color:var(--muted)">(de la start descărcare la stop sortare)</span></span><span></span></div>` : "";
+  return `<div class="card">
+    <div class="card-head">
+      <div><div class="truck">${esc(r.truck || "fără nr. auto")}</div><div class="meta">${fmtDate(r.date)}</div><span class="badge ${st.k}">${st.t}</span></div>
+      <div class="boxes">${fmtN(num(r.boxes))}<small>cutii</small></div>
+    </div>
+    <div class="stages">
+      ${stageRow("Descărcare", r.unloadStart, r.unloadEnd)}
+      ${stageRow("Sortare", r.sortStart, r.sortEnd)}
+      ${total}
+    </div>
+    ${r.notes ? `<div class="note">${esc(r.notes)}</div>` : ""}
+    <div class="card-actions">
+      ${action}<span class="spacer"></span>
+      <button class="btn btn-ghost btn-sm" data-act="editIn" data-id="${r.id}">✎ Editează</button>
+      <button class="btn btn-ghost btn-sm" data-act="delIn" data-id="${r.id}">🗑</button>
+    </div>
+  </div>`;
+}
+
+function renderOut() {
+  const today = todayStr();
+  const rows = S.outbound.filter((r) => inPeriod(dayOfIso(r.at)));
+  const todayRows = S.outbound.filter((r) => dayOfIso(r.at) === today);
+  const sum = (arr, k) => arr.reduce((a, r) => a + num(r[k]), 0);
+  const sumIn = S.inbound.reduce((a, r) => a + num(r.boxes), 0);
+  const sumOutAll = S.outbound.reduce((a, r) => a + num(r.boxes), 0);
+  $("sumOut").innerHTML = `
+    <div class="sum out"><div class="v">${fmtN(sum(todayRows, "boxes"))}</div><div class="l">Cutii livrate azi</div><div class="s">${fmtN(sum(todayRows, "pallets"))} paleți · ${todayRows.length} livrări</div></div>
+    <div class="sum out"><div class="v">${fmtN(sum(rows, "boxes"))}</div><div class="l">Cutii livrate în perioadă</div><div class="s">${fmtN(sum(rows, "pallets"))} paleți · ${rows.length} livrări</div></div>
+    <div class="sum"><div class="v">${fmtN(sumIn - sumOutAll)}</div><div class="l">Cutii rămase în depozit</div><div class="s">${fmtN(sumIn)} intrate − ${fmtN(sumOutAll)} livrate</div></div>`;
+  $("countOut").textContent = rows.length ? `${rows.length} livrări` : "";
+
+  const groups = {};
+  rows.forEach((r) => { const d = dayOfIso(r.at); (groups[d] = groups[d] || []).push(r); });
+  const days = Object.keys(groups).sort().reverse();
+  $("listOut").innerHTML = days.length ? days.map((d) => {
+    const g = groups[d].sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+    return `<div class="day">
+      <div class="day-head"><span>${fmtDate(d)}</span><span><b>${fmtN(sum(g, "boxes"))} cutii</b> · ${fmtN(sum(g, "pallets"))} paleți · ${g.length} livrări</span></div>
+      ${g.map((r) => `<div class="row">
+        <div class="time">${fmtTime(r.at)}</div>
+        <div class="info"><div class="truck">${esc(r.truck || "–")}</div>${r.notes ? `<div class="sub">${esc(r.notes)}</div>` : ""}</div>
+        <div class="nums"><div class="b">${fmtN(num(r.boxes))}</div><div class="p">cutii · ${fmtN(num(r.pallets))} pal.</div></div>
+        <div class="act"><button class="btn btn-ghost btn-sm" data-act="editOut" data-id="${r.id}">✎</button><button class="btn btn-ghost btn-sm" data-act="delOut" data-id="${r.id}">🗑</button></div>
+      </div>`).join("")}
+    </div>`;
+  }).join("") : `<div class="empty">Nicio livrare în perioada selectată.</div>`;
+}
+
+/* live timers – update only the running spans */
+setInterval(() => {
+  document.querySelectorAll(".live[data-start]").forEach((el) => { el.textContent = fmtDur(Date.now() - new Date(el.dataset.start)); });
+}, 1000);
+
+/* ================= Actions ================= */
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const { act, id } = b.dataset;
+  const rIn = S.inbound.find((r) => r.id === id), rOut = S.outbound.find((r) => r.id === id);
+  try {
+    if (["unloadStart", "unloadEnd", "sortStart", "sortEnd"].includes(act)) {
+      b.disabled = true;
+      await updateDoc(doc(db, "inbound", id), { [act]: new Date().toISOString(), updatedAt: serverTimestamp() });
+      toast({ unloadStart: "Descărcare pornită", unloadEnd: "Descărcare oprită", sortStart: "Sortare pornită", sortEnd: "Sortare finalizată" }[act]);
+    } else if (act === "editIn") openInModal(rIn);
+    else if (act === "editOut") openOutModal(rOut);
+    else if (act === "delIn") { if (confirm(`Ștergi camionul ${rIn?.truck || ""} (${fmtN(num(rIn?.boxes))} cutii)?`)) { await deleteDoc(doc(db, "inbound", id)); toast("Intrare ștearsă"); } }
+    else if (act === "delOut") { if (confirm(`Ștergi livrarea din ${fmtDateIso(rOut?.at)} ${fmtTime(rOut?.at)} (${fmtN(num(rOut?.boxes))} cutii)?`)) { await deleteDoc(doc(db, "outbound", id)); toast("Livrare ștearsă"); } }
+  } catch (err) { toast("Eroare: " + (err.code || err.message)); }
+});
+$("fabIn").addEventListener("click", () => openInModal(null));
+$("fabOut").addEventListener("click", () => openOutModal(null));
+
+/* ================= Modals (close only from ✕ / Anulează) ================= */
+function openModal(title, bodyHtml, onSave) {
+  $("modalRoot").innerHTML = `<div class="overlay"><div class="modal">
+    <div class="modal-head"><h3>${title}</h3><button class="x" id="mClose" type="button">✕</button></div>
+    <form id="mForm">${bodyHtml}<div class="error" id="mErr"></div>
+    <div class="actions"><button type="button" class="btn btn-ghost" id="mCancel">Anulează</button><button type="submit" class="btn btn-primary" id="mSave">Salvează</button></div></form>
+  </div></div>`;
+  const close = () => { $("modalRoot").innerHTML = ""; };
+  $("mClose").onclick = close; $("mCancel").onclick = close;
+  $("mForm").onsubmit = async (e) => {
+    e.preventDefault(); $("mErr").textContent = ""; $("mSave").disabled = true;
+    try { await onSave(close); } catch (err) { $("mErr").textContent = err.message || String(err); $("mSave").disabled = false; }
+  };
+  const first = $("mForm").querySelector("input"); if (first) setTimeout(() => first.focus(), 50);
+}
+
+function openInModal(r) {
+  const isEdit = !!r;
+  const times = isEdit ? `<fieldset><legend>Ore (corectare manuală)</legend>
+    <div class="grid2">
+      <div class="field"><label>Start descărcare</label><input type="datetime-local" id="f_unloadStart" value="${isoToLocalInput(r.unloadStart)}"></div>
+      <div class="field"><label>Stop descărcare</label><input type="datetime-local" id="f_unloadEnd" value="${isoToLocalInput(r.unloadEnd)}"></div>
+      <div class="field"><label>Start sortare</label><input type="datetime-local" id="f_sortStart" value="${isoToLocalInput(r.sortStart)}"></div>
+      <div class="field"><label>Stop sortare</label><input type="datetime-local" id="f_sortEnd" value="${isoToLocalInput(r.sortEnd)}"></div>
+    </div><div class="s" style="font-size:12px;color:var(--muted)">Lasă gol un câmp ca să ștergi momentul respectiv (ex. ai apăsat Start din greșeală).</div></fieldset>` : "";
+  openModal(isEdit ? "Editează intrarea" : "Camion nou (intrare)", `
+    <div class="grid2">
+      <div class="field"><label>Nr. auto</label><input id="f_truck" value="${esc(r?.truck || "")}" placeholder="ex. B 123 ABC" autocapitalize="characters"></div>
+      <div class="field"><label>Data sosirii</label><input type="date" id="f_date" value="${esc(r?.date || todayStr())}" required></div>
+      <div class="field"><label>Nr. cutii</label><input type="number" id="f_boxes" min="0" step="1" inputmode="numeric" value="${r?.boxes ?? ""}" required></div>
+    </div>
+    <div class="field"><label>Observații</label><textarea id="f_notes">${esc(r?.notes || "")}</textarea></div>
+    ${times}`, async (close) => {
+    const data = { truck: $("f_truck").value.trim().toUpperCase(), date: $("f_date").value, boxes: Math.round(num($("f_boxes").value)), notes: $("f_notes").value.trim(), updatedAt: serverTimestamp() };
+    if (!data.date) throw new Error("Data este obligatorie.");
+    if (data.boxes <= 0) throw new Error("Numărul de cutii trebuie să fie mai mare ca 0.");
+    if (isEdit) {
+      for (const k of ["unloadStart", "unloadEnd", "sortStart", "sortEnd"]) data[k] = localInputToIso($("f_" + k).value);
+      const chk = (a, b, msg) => { if (data[a] && data[b] && new Date(data[b]) < new Date(data[a])) throw new Error(msg); };
+      chk("unloadStart", "unloadEnd", "Stop descărcare nu poate fi înainte de Start descărcare.");
+      chk("sortStart", "sortEnd", "Stop sortare nu poate fi înainte de Start sortare.");
+      await updateDoc(doc(db, "inbound", r.id), data); toast("Intrare actualizată");
+    } else {
+      await addDoc(colIn, { ...data, unloadStart: null, unloadEnd: null, sortStart: null, sortEnd: null, createdAt: serverTimestamp() }); toast("Camion adăugat");
+    }
+    close();
+  });
+}
+
+function openOutModal(r) {
+  const isEdit = !!r;
+  openModal(isEdit ? "Editează livrarea" : "Livrare nouă (ieșire)", `
+    <div class="field"><label>Data și ora</label><input type="datetime-local" id="f_at" value="${isEdit ? isoToLocalInput(r.at) : nowLocalInput()}" required></div>
+    <div class="grid2">
+      <div class="field"><label>Nr. cutii</label><input type="number" id="f_boxes" min="0" step="1" inputmode="numeric" value="${r?.boxes ?? ""}" required></div>
+      <div class="field"><label>Nr. paleți</label><input type="number" id="f_pallets" min="0" step="1" inputmode="numeric" value="${r?.pallets ?? ""}" required></div>
+      <div class="field"><label>Nr. auto</label><input id="f_truck" value="${esc(r?.truck || "")}" autocapitalize="characters"></div>
+    </div>
+    <div class="field"><label>Observații</label><textarea id="f_notes">${esc(r?.notes || "")}</textarea></div>`, async (close) => {
+    const data = { at: localInputToIso($("f_at").value), boxes: Math.round(num($("f_boxes").value)), pallets: Math.round(num($("f_pallets").value)), truck: $("f_truck").value.trim().toUpperCase(), notes: $("f_notes").value.trim(), updatedAt: serverTimestamp() };
+    if (!data.at) throw new Error("Data și ora sunt obligatorii.");
+    if (data.boxes <= 0) throw new Error("Numărul de cutii trebuie să fie mai mare ca 0.");
+    const stock = S.inbound.reduce((a, x) => a + num(x.boxes), 0) - S.outbound.filter((x) => x.id !== r?.id).reduce((a, x) => a + num(x.boxes), 0);
+    if (data.boxes > stock && !confirm(`Atenție: livrezi ${fmtN(data.boxes)} cutii, dar în depozit sunt doar ${fmtN(stock)}. Salvezi oricum?`)) { $("mSave").disabled = false; return; }
+    if (isEdit) { await updateDoc(doc(db, "outbound", r.id), data); toast("Livrare actualizată"); }
+    else { await addDoc(colOut, { ...data, createdAt: serverTimestamp() }); toast("Livrare adăugată"); }
+    close();
+  });
+}
+
+/* ================= Export CSV (Excel RO: separator ; ) ================= */
+$("exportBtn").addEventListener("click", () => {
+  const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  let rows, name;
+  if (S.tab === "in") {
+    const data = S.inbound.filter((r) => inPeriod(r.date)).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    rows = [["Data", "Nr auto", "Cutii", "Start descarcare", "Stop descarcare", "Durata descarcare (min)", "Start sortare", "Stop sortare", "Durata sortare (min)", "Durata totala (min)", "Status", "Observatii"]];
+    data.forEach((r) => rows.push([fmtDate(r.date), r.truck, num(r.boxes), fmtDT(r.unloadStart), fmtDT(r.unloadEnd), durMin(r.unloadStart, r.unloadEnd), fmtDT(r.sortStart), fmtDT(r.sortEnd), durMin(r.sortStart, r.sortEnd), durMin(r.unloadStart, r.sortEnd), statusOf(r).t, r.notes]));
+    name = "intrari";
+  } else {
+    const data = S.outbound.filter((r) => inPeriod(dayOfIso(r.at))).sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+    rows = [["Data", "Ora", "Nr auto", "Cutii", "Paleti", "Observatii"]];
+    data.forEach((r) => rows.push([fmtDateIso(r.at), fmtTime(r.at), r.truck, num(r.boxes), num(r.pallets), r.notes]));
+    name = "livrari";
+  }
+  const csv = "\uFEFF" + rows.map((r) => r.map(q).join(";")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `LCW_${name}_${S.from || "inceput"}_${S.to || todayStr()}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+});
+function fmtDT(iso) { return iso ? `${fmtDateIso(iso)} ${fmtTime(iso)}` : ""; }
+
+/* ================= Offline indicator & PWA ================= */
+const upd = () => $("offlineBar").classList.toggle("hidden", navigator.onLine);
+window.addEventListener("online", upd); window.addEventListener("offline", upd); upd();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
