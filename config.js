@@ -1,11 +1,9 @@
-// Configurația proiectului Firebase.
-// Firebase Console → Project settings → General → Your apps → (Web app) → SDK setup and configuration → Config
-// Copiază valorile de acolo în câmpurile de mai jos.
+// Configurația proiectului Firebase (LCWoff-inout).
 window.FIREBASE_CONFIG = {
-  apiKey: "PUNE_AICI_apiKey",
-  authDomain: "PUNE_AICI.firebaseapp.com",
-  projectId: "PUNE_AICI_projectId",
-  storageBucket: "PUNE_AICI.appspot.com",
-  messagingSenderId: "PUNE_AICI",
-  appId: "PUNE_AICI"
+  apiKey: "AIzaSyDXp5jvM1Ga_yT4WpylrISPpRHXtWeHTUM",
+  authDomain: "lcwoff-inout.firebaseapp.com",
+  projectId: "lcwoff-inout",
+  storageBucket: "lcwoff-inout.firebasestorage.app",
+  messagingSenderId: "11654601566",
+  appId: "1:11654601566:web:8e77889025b6cf73d18dcf"
 };
