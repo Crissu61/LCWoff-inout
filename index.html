@@ -160,7 +160,7 @@
       <button id="logoutBtn">Ieșire</button>
     </div>
     <div class="stock">
-      <div class="box"><div class="v" id="stockTotal">–</div><div class="l">Cutii în depozit</div></div>
+      <div class="box"><div class="v" id="stockTotal">–</div><div class="l">Cutii CD în depozit</div></div>
       <div class="box warn"><div class="v" id="stockUnsorted">–</div><div class="l">din care nesortate (bulk)</div></div>
     </div>
   </header>
@@ -241,6 +241,8 @@ function fmtDur(ms) {
 function dur(a, b) { if (!a || !b) return null; return new Date(b) - new Date(a); }
 function durMin(a, b) { const d = dur(a, b); return d == null ? "" : (d / 60000).toFixed(1).replace(".", ","); }
 function num(v) { const n = Number(v); return isNaN(n) ? 0 : n; }
+function ido(r) { return num(r.boxesIDO); }
+function outTotal(r) { return num(r.boxes) + ido(r); }
 function fmtN(n) { return (n ?? 0).toLocaleString("ro-RO"); }
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function dayOfIso(iso) { return iso ? todayStr(new Date(iso)) : ""; }
@@ -398,9 +400,9 @@ function renderOut() {
   const sumIn = S.inbound.reduce((a, r) => a + num(r.boxes), 0);
   const sumOutAll = S.outbound.reduce((a, r) => a + num(r.boxes), 0);
   $("sumOut").innerHTML = `
-    <div class="sum out"><div class="v">${fmtN(sum(todayRows, "boxes"))}</div><div class="l">Cutii livrate azi</div><div class="s">${fmtN(sum(todayRows, "pallets"))} paleți · ${todayRows.length} livrări</div></div>
-    <div class="sum out"><div class="v">${fmtN(sum(rows, "boxes"))}</div><div class="l">Cutii livrate în perioadă</div><div class="s">${fmtN(sum(rows, "pallets"))} paleți · ${rows.length} livrări</div></div>
-    <div class="sum"><div class="v">${fmtN(sumIn - sumOutAll)}</div><div class="l">Cutii rămase în depozit</div><div class="s">${fmtN(sumIn)} intrate − ${fmtN(sumOutAll)} livrate</div></div>`;
+    <div class="sum out"><div class="v">${fmtN(sum(todayRows, "boxes") + sum(todayRows, "boxesIDO"))}</div><div class="l">Cutii livrate azi</div><div class="s">CD ${fmtN(sum(todayRows, "boxes"))} · IDO ${fmtN(sum(todayRows, "boxesIDO"))}</div><div class="s">${fmtN(sum(todayRows, "pallets"))} paleți · ${todayRows.length} livrări</div></div>
+    <div class="sum out"><div class="v">${fmtN(sum(rows, "boxes") + sum(rows, "boxesIDO"))}</div><div class="l">Cutii livrate în perioadă</div><div class="s">CD ${fmtN(sum(rows, "boxes"))} · IDO ${fmtN(sum(rows, "boxesIDO"))}</div><div class="s">${fmtN(sum(rows, "pallets"))} paleți · ${rows.length} livrări</div></div>
+    <div class="sum"><div class="v">${fmtN(sumIn - sumOutAll)}</div><div class="l">Cutii CD rămase în depozit</div><div class="s">${fmtN(sumIn)} intrate − ${fmtN(sumOutAll)} livrate CD</div></div>`;
   $("countOut").textContent = rows.length ? `${rows.length} livrări` : "";
 
   const groups = {};
@@ -409,11 +411,11 @@ function renderOut() {
   $("listOut").innerHTML = days.length ? days.map((d) => {
     const g = groups[d].sort((a, b) => (b.at || "").localeCompare(a.at || ""));
     return `<div class="day">
-      <div class="day-head"><span>${fmtDate(d)}</span><span><b>${fmtN(sum(g, "boxes"))} cutii</b> · ${fmtN(sum(g, "pallets"))} paleți · ${g.length} livrări</span></div>
+      <div class="day-head"><span>${fmtDate(d)}</span><span><b>${fmtN(sum(g, "boxes") + sum(g, "boxesIDO"))} cutii</b> (CD ${fmtN(sum(g, "boxes"))} · IDO ${fmtN(sum(g, "boxesIDO"))}) · ${fmtN(sum(g, "pallets"))} paleți · ${g.length} livrări</span></div>
       ${g.map((r) => `<div class="row">
         <div class="time">${fmtTime(r.at)}</div>
         <div class="info"><div class="truck">${esc(r.truck || "–")}</div>${r.notes ? `<div class="sub">${esc(r.notes)}</div>` : ""}</div>
-        <div class="nums"><div class="b">${fmtN(num(r.boxes))}</div><div class="p">cutii · ${fmtN(num(r.pallets))} pal.</div></div>
+        <div class="nums"><div class="b">${fmtN(outTotal(r))}</div><div class="p">CD ${fmtN(num(r.boxes))} · IDO ${fmtN(ido(r))}</div><div class="p">${fmtN(num(r.pallets))} pal.</div></div>
         <div class="act"><button class="btn btn-ghost btn-sm" data-act="editOut" data-id="${r.id}">✎</button><button class="btn btn-ghost btn-sm" data-act="delOut" data-id="${r.id}">🗑</button></div>
       </div>`).join("")}
     </div>`;
@@ -438,7 +440,7 @@ document.addEventListener("click", async (e) => {
     } else if (act === "editIn") openInModal(rIn);
     else if (act === "editOut") openOutModal(rOut);
     else if (act === "delIn") { if (confirm(`Ștergi camionul ${rIn?.truck || ""} (${fmtN(num(rIn?.boxes))} cutii)?`)) { await deleteDoc(doc(db, "inbound", id)); toast("Intrare ștearsă"); } }
-    else if (act === "delOut") { if (confirm(`Ștergi livrarea din ${fmtDateIso(rOut?.at)} ${fmtTime(rOut?.at)} (${fmtN(num(rOut?.boxes))} cutii)?`)) { await deleteDoc(doc(db, "outbound", id)); toast("Livrare ștearsă"); } }
+    else if (act === "delOut") { if (confirm(`Ștergi livrarea din ${fmtDateIso(rOut?.at)} ${fmtTime(rOut?.at)} (${fmtN(outTotal(rOut || {}))} cutii)?`)) { await deleteDoc(doc(db, "outbound", id)); toast("Livrare ștearsă"); } }
   } catch (err) { toast("Eroare: " + (err.code || err.message)); }
 });
 $("fabIn").addEventListener("click", () => openInModal(null));
@@ -498,16 +500,19 @@ function openOutModal(r) {
   openModal(isEdit ? "Editează livrarea" : "Livrare nouă (ieșire)", `
     <div class="field"><label>Data și ora</label><input type="datetime-local" id="f_at" value="${isEdit ? isoToLocalInput(r.at) : nowLocalInput()}" required></div>
     <div class="grid2">
-      <div class="field"><label>Nr. cutii</label><input type="number" id="f_boxes" min="0" step="1" inputmode="numeric" value="${r?.boxes ?? ""}" required></div>
-      <div class="field"><label>Nr. paleți</label><input type="number" id="f_pallets" min="0" step="1" inputmode="numeric" value="${r?.pallets ?? ""}" required></div>
+      <div class="field"><label>Cutii CD (din descărcări)</label><input type="number" id="f_boxes" min="0" step="1" inputmode="numeric" value="${r?.boxes ?? ""}" placeholder="0"></div>
+      <div class="field"><label>Cutii IDO (din stoc raft)</label><input type="number" id="f_boxesIDO" min="0" step="1" inputmode="numeric" value="${r?.boxesIDO ?? ""}" placeholder="0"></div>
+      <div class="field"><label>Nr. paleți (total)</label><input type="number" id="f_pallets" min="0" step="1" inputmode="numeric" value="${r?.pallets ?? ""}" required></div>
       <div class="field"><label>Nr. auto</label><input id="f_truck" value="${esc(r?.truck || "")}" autocapitalize="characters"></div>
     </div>
+    <div class="s" style="font-size:12px;color:var(--muted);margin:-6px 0 12px">CD se scad din stocul aplicației; IDO doar se înregistrează.</div>
     <div class="field"><label>Observații</label><textarea id="f_notes">${esc(r?.notes || "")}</textarea></div>`, async (close) => {
-    const data = { at: localInputToIso($("f_at").value), boxes: Math.round(num($("f_boxes").value)), pallets: Math.round(num($("f_pallets").value)), truck: $("f_truck").value.trim().toUpperCase(), notes: $("f_notes").value.trim(), updatedAt: serverTimestamp() };
+    const data = { at: localInputToIso($("f_at").value), boxes: Math.round(num($("f_boxes").value)), boxesIDO: Math.round(num($("f_boxesIDO").value)), pallets: Math.round(num($("f_pallets").value)), truck: $("f_truck").value.trim().toUpperCase(), notes: $("f_notes").value.trim(), updatedAt: serverTimestamp() };
     if (!data.at) throw new Error("Data și ora sunt obligatorii.");
-    if (data.boxes <= 0) throw new Error("Numărul de cutii trebuie să fie mai mare ca 0.");
+    if (data.boxes < 0 || data.boxesIDO < 0) throw new Error("Numărul de cutii nu poate fi negativ.");
+    if (data.boxes + data.boxesIDO <= 0) throw new Error("Introdu cel puțin o cutie (CD sau IDO).");
     const stock = S.inbound.reduce((a, x) => a + num(x.boxes), 0) - S.outbound.filter((x) => x.id !== r?.id).reduce((a, x) => a + num(x.boxes), 0);
-    if (data.boxes > stock && !confirm(`Atenție: livrezi ${fmtN(data.boxes)} cutii, dar în depozit sunt doar ${fmtN(stock)}. Salvezi oricum?`)) { $("mSave").disabled = false; return; }
+    if (data.boxes > stock && !confirm(`Atenție: livrezi ${fmtN(data.boxes)} cutii CD, dar în depozit sunt doar ${fmtN(stock)}. Salvezi oricum?`)) { $("mSave").disabled = false; return; }
     if (isEdit) { await updateDoc(doc(db, "outbound", r.id), data); toast("Livrare actualizată"); }
     else { await addDoc(colOut, { ...data, createdAt: serverTimestamp() }); toast("Livrare adăugată"); }
     close();
@@ -525,8 +530,8 @@ $("exportBtn").addEventListener("click", () => {
     name = "intrari";
   } else {
     const data = S.outbound.filter((r) => inPeriod(dayOfIso(r.at))).sort((a, b) => (a.at || "").localeCompare(b.at || ""));
-    rows = [["Data", "Ora", "Nr auto", "Cutii", "Paleti", "Observatii"]];
-    data.forEach((r) => rows.push([fmtDateIso(r.at), fmtTime(r.at), r.truck, num(r.boxes), num(r.pallets), r.notes]));
+    rows = [["Data", "Ora", "Nr auto", "Cutii CD", "Cutii IDO", "Total cutii", "Paleti", "Observatii"]];
+    data.forEach((r) => rows.push([fmtDateIso(r.at), fmtTime(r.at), r.truck, num(r.boxes), ido(r), outTotal(r), num(r.pallets), r.notes]));
     name = "livrari";
   }
   const csv = "\uFEFF" + rows.map((r) => r.map(q).join(";")).join("\r\n");
