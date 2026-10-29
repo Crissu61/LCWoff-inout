@@ -1,6 +1,6 @@
 // Service worker minimal: păstrează interfața disponibilă offline.
 // Datele vin din Firestore (care are propriul cache offline), nu din acest cache.
-const CACHE = "lcw-inout-v2";
+const CACHE = "lcw-inout-v3";
 const SHELL = ["./", "./index.html", "./config.js", "./manifest.json", "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {

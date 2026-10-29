@@ -46,11 +46,16 @@
   .hdr-top h1{margin:0;font-size:17px;font-weight:700;letter-spacing:.01em}
   .hdr-top h1 small{display:block;font-size:11px;font-weight:400;opacity:.75;margin-top:2px}
   .hdr-top button{color:#fff;opacity:.85;font-size:13px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.12)}
-  .stock{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .stock{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
+  @media (max-width:380px){.stock{grid-template-columns:1fr 1fr}}
   .stock .box{background:rgba(255,255,255,.1);border-radius:10px;padding:8px 12px}
   .stock .box .v{font-size:24px;font-weight:700;line-height:1.1}
   .stock .box .l{font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.04em}
   .stock .box.warn .v{color:#ffd27d}
+  .stock .box.bp .v{color:#9fd3ff}
+  .card.transfer{border-left:4px solid var(--out);background:#f7faff}
+  .card.transfer .truck{color:var(--out)}
+  .fab.bp{bottom:78px;background:var(--navy);font-size:14px;padding:12px 18px}
 
   nav.tabs{display:flex;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:19}
   nav.tabs button{flex:1;padding:13px 0;font-weight:700;font-size:15px;color:var(--muted);border-bottom:3px solid transparent}
@@ -162,6 +167,7 @@
     <div class="stock">
       <div class="box"><div class="v" id="stockTotal">–</div><div class="l">Cutii CD în depozit</div></div>
       <div class="box warn"><div class="v" id="stockUnsorted">–</div><div class="l">din care nesortate (bulk)</div></div>
+      <div class="box bp"><div class="v" id="stockBP">–</div><div class="l">Cutii în storage BP</div></div>
     </div>
   </header>
   <div class="offline-bar hidden" id="offlineBar">Fără conexiune – modificările se salvează local și se sincronizează când revine internetul</div>
@@ -195,6 +201,7 @@
     </section>
   </main>
 
+  <button class="fab bp" id="fabTr">⇄ Transfer → BP</button>
   <button class="fab in" id="fabIn">+ Camion nou</button>
   <button class="fab out hidden" id="fabOut">+ Livrare</button>
 </div>
@@ -217,9 +224,10 @@ const auth = getAuth(app);
 const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 const colIn = collection(db, "inbound");
 const colOut = collection(db, "outbound");
+const colTr = collection(db, "transfers");
 
 /* ================= State ================= */
-const S = { inbound: [], outbound: [], tab: "in", from: null, to: null, unsubs: [] };
+const S = { inbound: [], outbound: [], transfers: [], tab: "in", from: null, to: null, unsubs: [] };
 const $ = (id) => document.getElementById(id);
 
 /* ================= Helpers ================= */
@@ -242,6 +250,9 @@ function dur(a, b) { if (!a || !b) return null; return new Date(b) - new Date(a)
 function durMin(a, b) { const d = dur(a, b); return d == null ? "" : (d / 60000).toFixed(1).replace(".", ","); }
 function num(v) { const n = Number(v); return isNaN(n) ? 0 : n; }
 function ido(r) { return num(r.boxesIDO); }
+function sumBy(arr, f) { return arr.reduce((a, r) => a + f(r), 0); }
+function stockCD(excludeId) { return sumBy(S.inbound, (r) => num(r.boxes)) - sumBy(S.outbound, (r) => num(r.boxes)) - sumBy(S.transfers.filter((t) => t.id !== excludeId), (r) => num(r.boxes)); }
+function stockBP(excludeOutId) { return sumBy(S.transfers, (r) => num(r.boxes)) - sumBy(S.outbound.filter((o) => o.id !== excludeOutId), ido); }
 function outTotal(r) { return num(r.boxes) + ido(r); }
 function fmtN(n) { return (n ?? 0).toLocaleString("ro-RO"); }
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -280,7 +291,7 @@ onAuthStateChanged(auth, (user) => {
     subscribe();
   } else {
     $("app").classList.add("hidden"); $("login").classList.remove("hidden");
-    S.unsubs.forEach((u) => u()); S.unsubs = []; S.inbound = []; S.outbound = [];
+    S.unsubs.forEach((u) => u()); S.unsubs = []; S.inbound = []; S.outbound = []; S.transfers = [];
   }
 });
 
@@ -294,6 +305,10 @@ function subscribe() {
     S.outbound = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     render();
   }, (err) => toast("Eroare citire livrări: " + err.code)));
+  S.unsubs.push(onSnapshot(query(colTr, orderBy("at", "desc")), (snap) => {
+    S.transfers = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    render();
+  }, (err) => toast("Eroare citire transferuri: " + err.code)));
 }
 
 /* ================= Period ================= */
@@ -312,7 +327,7 @@ setMonth();
 function showTab(t) {
   S.tab = t;
   $("tabIn").classList.toggle("hidden", t !== "in"); $("tabOut").classList.toggle("hidden", t !== "out");
-  $("fabIn").classList.toggle("hidden", t !== "in"); $("fabOut").classList.toggle("hidden", t !== "out");
+  $("fabIn").classList.toggle("hidden", t !== "in"); $("fabTr").classList.toggle("hidden", t !== "in"); $("fabOut").classList.toggle("hidden", t !== "out");
   $("tabInBtn").className = t === "in" ? "active-in" : ""; $("tabOutBtn").className = t === "out" ? "active-out" : "";
 }
 $("tabInBtn").addEventListener("click", () => showTab("in"));
@@ -322,11 +337,10 @@ $("tabOutBtn").addEventListener("click", () => showTab("out"));
 function render() { renderStock(); renderIn(); renderOut(); }
 
 function renderStock() {
-  const sumIn = S.inbound.reduce((a, r) => a + num(r.boxes), 0);
-  const sumOut = S.outbound.reduce((a, r) => a + num(r.boxes), 0);
   const unsorted = S.inbound.filter((r) => !r.sortEnd).reduce((a, r) => a + num(r.boxes), 0);
-  $("stockTotal").textContent = fmtN(sumIn - sumOut);
+  $("stockTotal").textContent = fmtN(stockCD());
   $("stockUnsorted").textContent = fmtN(unsorted);
+  $("stockBP").textContent = fmtN(stockBP());
 }
 
 function renderIn() {
@@ -342,18 +356,22 @@ function renderIn() {
   const unlBoxes = unl.reduce((a, r) => a + num(r.boxes), 0);
   const srtBoxes = srt.reduce((a, r) => a + num(r.boxes), 0);
   const perBox = (ms, b) => (b > 0 ? (ms / 1000 / b).toFixed(1).replace(".", ",") + " s/cutie" : "–");
+  const trRows = S.transfers.filter((t) => inPeriod(dayOfIso(t.at)));
+  const trBoxes = sumBy(trRows, (t) => num(t.boxes));
 
   $("sumIn").innerHTML = `
     <div class="sum in"><div class="v">${fmtN(boxesToday)}</div><div class="l">Cutii intrate azi · ${todayRows.length} camioane</div></div>
     <div class="sum in"><div class="v">${fmtN(boxes)}</div><div class="l">Cutii în perioadă · ${rows.length} camioane</div></div>
     <div class="sum"><div class="v">${rows.filter((r) => !r.sortEnd).length}</div><div class="l">Camioane nefinalizate (în perioadă)</div></div>
+    <div class="sum out"><div class="v">${fmtN(trBoxes)}</div><div class="l">Transferat în BP (perioadă)</div><div class="s">${trRows.length} transferuri</div></div>
     <div class="sum"><div class="v">${unl.length ? fmtDur(unlMs / unl.length) : "–"}</div><div class="l">Medie descărcare / camion</div><div class="s">${perBox(unlMs, unlBoxes)}</div></div>
     <div class="sum"><div class="v">${srt.length ? fmtDur(srtMs / srt.length) : "–"}</div><div class="l">Medie sortare / camion</div><div class="s">${perBox(srtMs, srtBoxes)}</div></div>
     <div class="sum"><div class="v">${unl.length && srt.length ? fmtDur(unlMs / unl.length + srtMs / srt.length) : "–"}</div><div class="l">Medie total / camion</div></div>`;
 
   $("countIn").textContent = rows.length ? `${rows.length} camioane` : "";
-  const sorted = [...rows].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (tsMs(b.createdAt) - tsMs(a.createdAt)));
-  $("listIn").innerHTML = sorted.length ? sorted.map(cardIn).join("") : `<div class="empty">Nicio intrare în perioada selectată.</div>`;
+  const items = [...rows.map((r) => ({ k: "in", d: r.date, t: tsMs(r.createdAt), r })), ...trRows.map((r) => ({ k: "tr", d: dayOfIso(r.at), t: new Date(r.at).getTime(), r }))]
+    .sort((a, b) => (b.d || "").localeCompare(a.d || "") || (b.t - a.t));
+  $("listIn").innerHTML = items.length ? items.map((it) => (it.k === "in" ? cardIn(it.r) : cardTr(it.r))).join("") : `<div class="empty">Nicio intrare în perioada selectată.</div>`;
 }
 function tsMs(ts) { return ts && ts.toMillis ? ts.toMillis() : 0; }
 
@@ -392,17 +410,30 @@ function cardIn(r) {
   </div>`;
 }
 
+function cardTr(r) {
+  return `<div class="card transfer">
+    <div class="card-head">
+      <div><div class="truck">⇄ Transfer → storage BP</div><div class="meta">${fmtDateIso(r.at)} · ${fmtTime(r.at)}</div></div>
+      <div class="boxes" style="color:var(--out)">${fmtN(num(r.boxes))}<small>cutii CD → BP</small></div>
+    </div>
+    ${r.notes ? `<div class="note">${esc(r.notes)}</div>` : ""}
+    <div class="card-actions"><span class="spacer"></span>
+      <button class="btn btn-ghost btn-sm" data-act="editTr" data-id="${r.id}">✎ Editează</button>
+      <button class="btn btn-ghost btn-sm" data-act="delTr" data-id="${r.id}">🗑</button>
+    </div>
+  </div>`;
+}
+
 function renderOut() {
   const today = todayStr();
   const rows = S.outbound.filter((r) => inPeriod(dayOfIso(r.at)));
   const todayRows = S.outbound.filter((r) => dayOfIso(r.at) === today);
   const sum = (arr, k) => arr.reduce((a, r) => a + num(r[k]), 0);
-  const sumIn = S.inbound.reduce((a, r) => a + num(r.boxes), 0);
-  const sumOutAll = S.outbound.reduce((a, r) => a + num(r.boxes), 0);
   $("sumOut").innerHTML = `
     <div class="sum out"><div class="v">${fmtN(sum(todayRows, "boxes") + sum(todayRows, "boxesIDO"))}</div><div class="l">Cutii livrate azi</div><div class="s">CD ${fmtN(sum(todayRows, "boxes"))} · IDO ${fmtN(sum(todayRows, "boxesIDO"))}</div><div class="s">${fmtN(sum(todayRows, "pallets"))} paleți · ${todayRows.length} livrări</div></div>
     <div class="sum out"><div class="v">${fmtN(sum(rows, "boxes") + sum(rows, "boxesIDO"))}</div><div class="l">Cutii livrate în perioadă</div><div class="s">CD ${fmtN(sum(rows, "boxes"))} · IDO ${fmtN(sum(rows, "boxesIDO"))}</div><div class="s">${fmtN(sum(rows, "pallets"))} paleți · ${rows.length} livrări</div></div>
-    <div class="sum"><div class="v">${fmtN(sumIn - sumOutAll)}</div><div class="l">Cutii CD rămase în depozit</div><div class="s">${fmtN(sumIn)} intrate − ${fmtN(sumOutAll)} livrate CD</div></div>`;
+    <div class="sum"><div class="v">${fmtN(stockCD())}</div><div class="l">Cutii CD rămase în depozit</div><div class="s">intrate − livrate CD − transferate BP</div></div>
+    <div class="sum"><div class="v">${fmtN(stockBP())}</div><div class="l">Cutii în storage BP</div><div class="s">transferate − livrate IDO</div></div>`;
   $("countOut").textContent = rows.length ? `${rows.length} livrări` : "";
 
   const groups = {};
@@ -439,11 +470,14 @@ document.addEventListener("click", async (e) => {
       toast({ unloadStart: "Descărcare pornită", unloadEnd: "Descărcare oprită", sortStart: "Sortare pornită", sortEnd: "Sortare finalizată" }[act]);
     } else if (act === "editIn") openInModal(rIn);
     else if (act === "editOut") openOutModal(rOut);
+    else if (act === "editTr") openTrModal(S.transfers.find((t) => t.id === id));
+    else if (act === "delTr") { const rT = S.transfers.find((t) => t.id === id); if (confirm(`Ștergi transferul din ${fmtDateIso(rT?.at)} (${fmtN(num(rT?.boxes))} cutii)?`)) { await deleteDoc(doc(db, "transfers", id)); toast("Transfer șters"); } }
     else if (act === "delIn") { if (confirm(`Ștergi camionul ${rIn?.truck || ""} (${fmtN(num(rIn?.boxes))} cutii)?`)) { await deleteDoc(doc(db, "inbound", id)); toast("Intrare ștearsă"); } }
     else if (act === "delOut") { if (confirm(`Ștergi livrarea din ${fmtDateIso(rOut?.at)} ${fmtTime(rOut?.at)} (${fmtN(outTotal(rOut || {}))} cutii)?`)) { await deleteDoc(doc(db, "outbound", id)); toast("Livrare ștearsă"); } }
   } catch (err) { toast("Eroare: " + (err.code || err.message)); }
 });
 $("fabIn").addEventListener("click", () => openInModal(null));
+$("fabTr").addEventListener("click", () => openTrModal(null));
 $("fabOut").addEventListener("click", () => openOutModal(null));
 
 /* ================= Modals (close only from ✕ / Anulează) ================= */
@@ -511,10 +545,30 @@ function openOutModal(r) {
     if (!data.at) throw new Error("Data și ora sunt obligatorii.");
     if (data.boxes < 0 || data.boxesIDO < 0) throw new Error("Numărul de cutii nu poate fi negativ.");
     if (data.boxes + data.boxesIDO <= 0) throw new Error("Introdu cel puțin o cutie (CD sau IDO).");
-    const stock = S.inbound.reduce((a, x) => a + num(x.boxes), 0) - S.outbound.filter((x) => x.id !== r?.id).reduce((a, x) => a + num(x.boxes), 0);
+    const stock = stockCD() + (r ? num(r.boxes) : 0);
     if (data.boxes > stock && !confirm(`Atenție: livrezi ${fmtN(data.boxes)} cutii CD, dar în depozit sunt doar ${fmtN(stock)}. Salvezi oricum?`)) { $("mSave").disabled = false; return; }
+    const bp = stockBP(r?.id);
+    if (data.boxesIDO > bp && !confirm(`Atenție: livrezi ${fmtN(data.boxesIDO)} cutii IDO, dar în storage BP sunt doar ${fmtN(bp)}. Salvezi oricum?`)) { $("mSave").disabled = false; return; }
     if (isEdit) { await updateDoc(doc(db, "outbound", r.id), data); toast("Livrare actualizată"); }
     else { await addDoc(colOut, { ...data, createdAt: serverTimestamp() }); toast("Livrare adăugată"); }
+    close();
+  });
+}
+
+function openTrModal(r) {
+  const isEdit = !!r;
+  openModal(isEdit ? "Editează transferul" : "Transfer CD → storage BP", `
+    <div class="field"><label>Data și ora</label><input type="datetime-local" id="f_at" value="${isEdit ? isoToLocalInput(r.at) : nowLocalInput()}" required></div>
+    <div class="field"><label>Nr. cutii transferate</label><input type="number" id="f_boxes" min="1" step="1" inputmode="numeric" value="${r?.boxes ?? ""}" required></div>
+    <div class="field"><label>Observații</label><textarea id="f_notes">${esc(r?.notes || "")}</textarea></div>
+    <div class="s" style="font-size:12px;color:var(--muted);margin:-6px 0 12px">Cutiile se scad din stocul CD și se adaugă în storage BP. Disponibil CD acum: <b>${fmtN(stockCD(r?.id))}</b>.</div>`, async (close) => {
+    const data = { at: localInputToIso($("f_at").value), boxes: Math.round(num($("f_boxes").value)), notes: $("f_notes").value.trim(), updatedAt: serverTimestamp() };
+    if (!data.at) throw new Error("Data și ora sunt obligatorii.");
+    if (data.boxes <= 0) throw new Error("Numărul de cutii trebuie să fie mai mare ca 0.");
+    const avail = stockCD(r?.id);
+    if (data.boxes > avail && !confirm(`Atenție: transferi ${fmtN(data.boxes)} cutii, dar în stocul CD sunt doar ${fmtN(avail)}. Salvezi oricum?`)) { $("mSave").disabled = false; return; }
+    if (isEdit) { await updateDoc(doc(db, "transfers", r.id), data); toast("Transfer actualizat"); }
+    else { await addDoc(colTr, { ...data, createdAt: serverTimestamp() }); toast("Transfer salvat"); }
     close();
   });
 }
@@ -525,8 +579,10 @@ $("exportBtn").addEventListener("click", () => {
   let rows, name;
   if (S.tab === "in") {
     const data = S.inbound.filter((r) => inPeriod(r.date)).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-    rows = [["Data", "Nr auto", "Cutii", "Start descarcare", "Stop descarcare", "Durata descarcare (min)", "Start sortare", "Stop sortare", "Durata sortare (min)", "Durata totala (min)", "Status", "Observatii"]];
-    data.forEach((r) => rows.push([fmtDate(r.date), r.truck, num(r.boxes), fmtDT(r.unloadStart), fmtDT(r.unloadEnd), durMin(r.unloadStart, r.unloadEnd), fmtDT(r.sortStart), fmtDT(r.sortEnd), durMin(r.sortStart, r.sortEnd), durMin(r.unloadStart, r.sortEnd), statusOf(r).t, r.notes]));
+    rows = [["Tip", "Data", "Nr auto", "Cutii", "Start descarcare", "Stop descarcare", "Durata descarcare (min)", "Start sortare", "Stop sortare", "Durata sortare (min)", "Durata totala (min)", "Status", "Observatii"]];
+    data.forEach((r) => rows.push(["Camion", fmtDate(r.date), r.truck, num(r.boxes), fmtDT(r.unloadStart), fmtDT(r.unloadEnd), durMin(r.unloadStart, r.unloadEnd), fmtDT(r.sortStart), fmtDT(r.sortEnd), durMin(r.sortStart, r.sortEnd), durMin(r.unloadStart, r.sortEnd), statusOf(r).t, r.notes]));
+    S.transfers.filter((t) => inPeriod(dayOfIso(t.at))).sort((a, b) => (a.at || "").localeCompare(b.at || ""))
+      .forEach((t) => rows.push(["Transfer BP", fmtDateIso(t.at), "", -num(t.boxes), fmtTime(t.at), "", "", "", "", "", "", "Transfer CD → BP", t.notes]));
     name = "intrari";
   } else {
     const data = S.outbound.filter((r) => inPeriod(dayOfIso(r.at))).sort((a, b) => (a.at || "").localeCompare(b.at || ""));
