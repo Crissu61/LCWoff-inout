@@ -46,13 +46,11 @@
   .hdr-top h1{margin:0;font-size:17px;font-weight:700;letter-spacing:.01em}
   .hdr-top h1 small{display:block;font-size:11px;font-weight:400;opacity:.75;margin-top:2px}
   .hdr-top button{color:#fff;opacity:.85;font-size:13px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.12)}
-  .stock{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
-  @media (max-width:380px){.stock{grid-template-columns:1fr 1fr}}
+  .stock{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
   .stock .box{background:rgba(255,255,255,.1);border-radius:10px;padding:8px 12px}
   .stock .box .v{font-size:24px;font-weight:700;line-height:1.1}
   .stock .box .l{font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.04em}
   .stock .box.warn .v{color:#ffd27d}
-  .stock .box.bp .v{color:#9fd3ff}
   .card.transfer{border-left:4px solid var(--out);background:#f7faff}
   .card.transfer .truck{color:var(--out)}
   .fab.bp{bottom:78px;background:var(--navy);font-size:14px;padding:12px 18px}
@@ -167,7 +165,6 @@
     <div class="stock">
       <div class="box"><div class="v" id="stockTotal">–</div><div class="l">Cutii CD în depozit</div></div>
       <div class="box warn"><div class="v" id="stockUnsorted">–</div><div class="l">din care nesortate (bulk)</div></div>
-      <div class="box bp"><div class="v" id="stockBP">–</div><div class="l">Cutii în storage BP</div></div>
     </div>
   </header>
   <div class="offline-bar hidden" id="offlineBar">Fără conexiune – modificările se salvează local și se sincronizează când revine internetul</div>
@@ -252,7 +249,6 @@ function num(v) { const n = Number(v); return isNaN(n) ? 0 : n; }
 function ido(r) { return num(r.boxesIDO); }
 function sumBy(arr, f) { return arr.reduce((a, r) => a + f(r), 0); }
 function stockCD(excludeId) { return sumBy(S.inbound, (r) => num(r.boxes)) - sumBy(S.outbound, (r) => num(r.boxes)) - sumBy(S.transfers.filter((t) => t.id !== excludeId), (r) => num(r.boxes)); }
-function stockBP(excludeOutId) { return sumBy(S.transfers, (r) => num(r.boxes)) - sumBy(S.outbound.filter((o) => o.id !== excludeOutId), ido); }
 function outTotal(r) { return num(r.boxes) + ido(r); }
 function fmtN(n) { return (n ?? 0).toLocaleString("ro-RO"); }
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -340,7 +336,6 @@ function renderStock() {
   const unsorted = S.inbound.filter((r) => !r.sortEnd).reduce((a, r) => a + num(r.boxes), 0);
   $("stockTotal").textContent = fmtN(stockCD());
   $("stockUnsorted").textContent = fmtN(unsorted);
-  $("stockBP").textContent = fmtN(stockBP());
 }
 
 function renderIn() {
@@ -432,8 +427,7 @@ function renderOut() {
   $("sumOut").innerHTML = `
     <div class="sum out"><div class="v">${fmtN(sum(todayRows, "boxes") + sum(todayRows, "boxesIDO"))}</div><div class="l">Cutii livrate azi</div><div class="s">CD ${fmtN(sum(todayRows, "boxes"))} · IDO ${fmtN(sum(todayRows, "boxesIDO"))}</div><div class="s">${fmtN(sum(todayRows, "pallets"))} paleți · ${todayRows.length} livrări</div></div>
     <div class="sum out"><div class="v">${fmtN(sum(rows, "boxes") + sum(rows, "boxesIDO"))}</div><div class="l">Cutii livrate în perioadă</div><div class="s">CD ${fmtN(sum(rows, "boxes"))} · IDO ${fmtN(sum(rows, "boxesIDO"))}</div><div class="s">${fmtN(sum(rows, "pallets"))} paleți · ${rows.length} livrări</div></div>
-    <div class="sum"><div class="v">${fmtN(stockCD())}</div><div class="l">Cutii CD rămase în depozit</div><div class="s">intrate − livrate CD − transferate BP</div></div>
-    <div class="sum"><div class="v">${fmtN(stockBP())}</div><div class="l">Cutii în storage BP</div><div class="s">transferate − livrate IDO</div></div>`;
+    <div class="sum"><div class="v">${fmtN(stockCD())}</div><div class="l">Cutii CD rămase în depozit</div><div class="s">intrate − livrate CD − transferate BP</div></div>`;
   $("countOut").textContent = rows.length ? `${rows.length} livrări` : "";
 
   const groups = {};
@@ -547,8 +541,6 @@ function openOutModal(r) {
     if (data.boxes + data.boxesIDO <= 0) throw new Error("Introdu cel puțin o cutie (CD sau IDO).");
     const stock = stockCD() + (r ? num(r.boxes) : 0);
     if (data.boxes > stock && !confirm(`Atenție: livrezi ${fmtN(data.boxes)} cutii CD, dar în depozit sunt doar ${fmtN(stock)}. Salvezi oricum?`)) { $("mSave").disabled = false; return; }
-    const bp = stockBP(r?.id);
-    if (data.boxesIDO > bp && !confirm(`Atenție: livrezi ${fmtN(data.boxesIDO)} cutii IDO, dar în storage BP sunt doar ${fmtN(bp)}. Salvezi oricum?`)) { $("mSave").disabled = false; return; }
     if (isEdit) { await updateDoc(doc(db, "outbound", r.id), data); toast("Livrare actualizată"); }
     else { await addDoc(colOut, { ...data, createdAt: serverTimestamp() }); toast("Livrare adăugată"); }
     close();
@@ -561,7 +553,7 @@ function openTrModal(r) {
     <div class="field"><label>Data și ora</label><input type="datetime-local" id="f_at" value="${isEdit ? isoToLocalInput(r.at) : nowLocalInput()}" required></div>
     <div class="field"><label>Nr. cutii transferate</label><input type="number" id="f_boxes" min="1" step="1" inputmode="numeric" value="${r?.boxes ?? ""}" required></div>
     <div class="field"><label>Observații</label><textarea id="f_notes">${esc(r?.notes || "")}</textarea></div>
-    <div class="s" style="font-size:12px;color:var(--muted);margin:-6px 0 12px">Cutiile se scad din stocul CD și se adaugă în storage BP. Disponibil CD acum: <b>${fmtN(stockCD(r?.id))}</b>.</div>`, async (close) => {
+    <div class="s" style="font-size:12px;color:var(--muted);margin:-6px 0 12px">Cutiile se scad din stocul CD și rămân în istoric ca transferate în BP. Disponibil CD acum: <b>${fmtN(stockCD(r?.id))}</b>.</div>`, async (close) => {
     const data = { at: localInputToIso($("f_at").value), boxes: Math.round(num($("f_boxes").value)), notes: $("f_notes").value.trim(), updatedAt: serverTimestamp() };
     if (!data.at) throw new Error("Data și ora sunt obligatorii.");
     if (data.boxes <= 0) throw new Error("Numărul de cutii trebuie să fie mai mare ca 0.");
